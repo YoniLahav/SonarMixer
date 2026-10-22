@@ -1,0 +1,4 @@
+pystray        # tray icon
+pillow         # tray icon image
+pycaw          # optional: "windows" audio provider
+pyserial       # optional: "serial" knob box input

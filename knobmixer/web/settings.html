@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knob Mixer Settings</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root {
+    --bg: #050505; --card: #0e0f12; --line: #1f2127; --field: #16171b; --field-line: #2a2c33;
+    --text: #e8e8ea; --muted: #9a9aa2; --accent: #1fb5c4; --danger: #ef4d5a; --warn: #e8b34f; --ok: #4fc98a;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 96px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  a { color: var(--accent); text-decoration: none; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  .hint code, code { background: var(--field); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  input, select, textarea, button { font: inherit; color: var(--text); }
+  input[type=text], input[type=number], select, textarea {
+    background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; padding: 6px 8px; min-width: 0; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -1px; }
+  input[type=color] { width: 34px; height: 32px; padding: 0; border: 1px solid var(--field-line); border-radius: 6px; background: var(--field); cursor: pointer; }
+  button { background: var(--field); border: 1px solid var(--field-line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: #3a3d46; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #031417; font-weight: 600; }
+  button.icon { padding: 6px 9px; color: var(--muted); }
+  button.icon:hover { color: var(--text); }
+  button:disabled { opacity: .4; cursor: default; }
+  .field { display: grid; gap: 4px; }
+  .field > span { color: var(--muted); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .status { font-size: 12px; color: var(--muted); }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--danger); }
+
+  .knob { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #0a0b0d; }
+  .knob-top { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center; }
+  .knob-keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .chan { display: flex; gap: 6px; }
+  .kf { display: flex; gap: 4px; }
+  .kf input.rec { border-color: var(--danger); }
+  .warn { color: var(--warn); font-size: 11px; min-height: 1em; }
+  .actions { display: flex; gap: 4px; }
+
+  .savebar { position: fixed; left: 0; right: 0; bottom: 0; background: #0b0c0fe8; border-top: 1px solid var(--line);
+    backdrop-filter: blur(6px); }
+  .savebar div { max-width: 860px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  #dirty { flex: 1; color: var(--muted); }
+  #errors { color: var(--danger); margin: 0 0 14px; padding-left: 18px; }
+  #errors:empty { display: none; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  @media (max-width: 640px) {
+    .knob-top { grid-template-columns: 34px minmax(0, 1fr) auto; }
+    .knob-top .chan { grid-column: 1 / -1; grid-row: 2; }
+    .knob-keys, .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Settings</h1>
+    <a href="/">← Back to knobs</a>
+  </header>
+  <ul id="errors"></ul>
+
+  <section>
+    <h2>Audio software</h2>
+    <div class="grid2">
+      <label class="field"><span>Provider</span><select id="provider"></select></label>
+      <label class="field" id="customWrap" hidden><span>Custom provider (module:Class)</span><input type="text" id="customProvider" placeholder="my_adapters.voicemeeter:VoicemeeterProvider"></label>
+    </div>
+    <p class="status" id="connStatus"></p>
+    <details>
+      <summary>Provider options (JSON)</summary>
+      <textarea id="providerOptions" rows="3" spellcheck="false"></textarea>
+      <p class="hint">Passed to the provider as-is. The built-in providers don't need any.</p>
+    </details>
+  </section>
+
+  <section>
+    <h2>Knobs</h2>
+    <div id="knobs"></div>
+    <button id="addKnob">+ Add knob</button>
+    <p class="hint">Each knob controls one channel. Keys are optional: use them for hotkeys, or leave them empty if the knob is only used from a serial device or the on-screen mixer. Click ⏺ and press a key combo to record it (Backspace clears, Esc cancels).
+      F13–F24 are safest: no normal keyboard has them, so they never clash with anything.</p>
+  </section>
+
+  <section>
+    <h2>Input methods</h2>
+    <label class="check"><input type="checkbox" id="hotkeysOn"> Global hotkeys</label>
+    <p class="status" id="hotkeyStatus"></p>
+    <div style="height:10px"></div>
+    <label class="check"><input type="checkbox" id="serialOn"> Serial device (DIY knob box)</label>
+    <div class="grid2" style="margin-top:8px">
+      <label class="field"><span>Port</span><input type="text" id="serialPort" placeholder="COM5"></label>
+      <label class="field"><span>Baud rate</span><input type="number" id="serialBaud"></label>
+    </div>
+    <p class="status" id="serialStatus"></p>
+    <p class="hint">The device sends one line per event, naming a knob by its position or id: <code>1 +1</code> turn right,
+      <code>1 -1</code> turn left, <code>1 press</code> toggle mute, <code>1 set 42</code> absolute position (for faders).</p>
+  </section>
+
+  <section>
+    <h2>General</h2>
+    <div class="grid2">
+      <label class="field"><span>Step per detent / key press (%)</span><input type="number" id="step" min="0.1" max="25" step="0.5"></label>
+      <label class="check" style="align-self:end;padding-bottom:6px"><input type="checkbox" id="overlay"> Show on-screen popup when a knob changes</label>
+    </div>
+    <p class="hint" id="cfgPath"></p>
+  </section>
+</main>
+
+<div class="savebar"><div>
+  <span id="dirty">No changes</span>
+  <button id="revert">Revert</button>
+  <button id="save" class="primary">Save</button>
+</div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let meta, cfg, saved, channels = [], recording = null;
+const ACTIONS = [["down", "Turn left"], ["up", "Turn right"], ["mute", "Press (mute)"]];
+const PALETTE = ["#4f6ee8", "#1fb5c4", "#a557f2", "#d8dae0", "#e8794f", "#4fc98a", "#e8b34f", "#e84f9b"];
+
+async function j(url, opts) { return (await fetch(url, opts)).json(); }
+
+async function init() {
+  meta = await j("/api/meta");
+  const c = await j("/api/config");
+  cfg = c.config; saved = JSON.stringify(cfg);
+  $("cfgPath").textContent = `Saved to ${c.path}`;
+  if (c.loadErrors.length) showErrors(c.loadErrors);
+  for (const p of meta.providers) $("provider").add(new Option(p.label, p.type));
+  $("provider").add(new Option("Custom adapter…", "__custom"));
+  renderAll();
+  await loadChannels();
+  pollStatus();
+}
+
+// ---------- rendering ----------
+function renderAll() {
+  const builtin = meta.providers.some(p => p.type === cfg.provider.type);
+  $("provider").value = builtin ? cfg.provider.type : "__custom";
+  $("customWrap").hidden = builtin;
+  $("customProvider").value = builtin ? "" : cfg.provider.type;
+  $("providerOptions").value = JSON.stringify(cfg.provider.options || {});
+  const hk = cfg.inputs.hotkeys || {}, se = cfg.inputs.serial || {};
+  $("hotkeysOn").checked = !!hk.enabled;
+  $("serialOn").checked = !!se.enabled;
+  $("serialPort").value = se.port || "";
+  $("serialBaud").value = se.baud || 115200;
+  $("step").value = +(cfg.step * 100).toFixed(2);
+  $("overlay").checked = cfg.overlay;
+  renderKnobs();
+  markDirty();
+}
+
+function channelOptions(current) {
+  let html = channels.map(c => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join("");
+  if (current && !channels.some(c => c.id === current)) html += `<option value="${esc(current)}">${esc(current)} (not available now)</option>`;
+  return `<option value="" disabled ${current ? "" : "selected"}>Pick a channel…</option>${html}<option value="__other">Other (type an id)…</option>`;
+}
+
+function renderKnobs() {
+  const box = $("knobs");
+  box.innerHTML = "";
+  cfg.knobs.forEach((k, i) => {
+    const el = document.createElement("div");
+    el.className = "knob";
+    el.innerHTML = `
+      <div class="knob-top">
+        <input type="color" value="${esc(k.color)}" title="Colour">
+        <input type="text" class="label" value="${esc(k.label)}" placeholder="Label" aria-label="Label">
+        <div class="chan"><select aria-label="Channel">${channelOptions(k.channel)}</select>
+          <input type="text" class="other" placeholder="channel id" hidden></div>
+        <div class="actions">
+          <button class="icon up" title="Move up" ${i === 0 ? "disabled" : ""}>↑</button>
+          <button class="icon down" title="Move down" ${i === cfg.knobs.length - 1 ? "disabled" : ""}>↓</button>
+          <button class="icon del" title="Remove">✕</button>
+        </div>
+      </div>
+      <div class="knob-keys">${ACTIONS.map(([a, label]) => `
+        <label class="field" data-action="${a}"><span>${label}</span>
+          <div class="kf"><input type="text" value="${esc(k.keys[a] || "")}" placeholder="none" spellcheck="false">
+            <button class="icon rec" title="Record a key">⏺</button></div>
+          <span class="warn"></span></label>`).join("")}
+      </div>`;
+    const [color, label] = el.querySelectorAll("input");
+    color.oninput = () => { k.color = color.value; markDirty(); };
+    label.oninput = () => { k.label = label.value; markDirty(); };
+    const sel = el.querySelector("select"), other = el.querySelector(".other");
+    if (k.channel) sel.value = k.channel;
+    sel.onchange = () => {
+      other.hidden = sel.value !== "__other";
+      if (other.hidden) { k.channel = sel.value; markDirty(); } else other.focus();
+    };
+    other.oninput = () => { k.channel = other.value.trim(); markDirty(); };
+    el.querySelector(".up").onclick = () => move(i, -1);
+    el.querySelector(".down").onclick = () => move(i, 1);
+    el.querySelector(".del").onclick = () => { cfg.knobs.splice(i, 1); renderKnobs(); markDirty(); };
+    for (const f of el.querySelectorAll("[data-action]")) {
+      const a = f.dataset.action, input = f.querySelector("input"), warn = f.querySelector(".warn");
+      const set = v => { if (v) k.keys[a] = v; else delete k.keys[a]; warn.textContent = keyWarning(v); markDirty(); };
+      warn.textContent = keyWarning(k.keys[a]);
+      input.oninput = () => set(input.value.trim());
+      f.querySelector(".rec").onclick = ev => { ev.preventDefault(); record(input, set); };
+    }
+    box.appendChild(el);
+  });
+}
+
+function move(i, d) {
+  const [k] = cfg.knobs.splice(i, 1);
+  cfg.knobs.splice(i + d, 0, k);
+  renderKnobs(); markDirty();
+}
+
+$("addKnob").onclick = () => {
+  const n = cfg.knobs.length + 1;
+  cfg.knobs.push({ id: "", label: `Knob ${n}`, channel: "", color: PALETTE[(n - 1) % PALETTE.length], keys: {} });
+  renderKnobs(); markDirty();
+};
+
+// ---------- keys ----------
+function keyWarning(combo) {
+  if (!combo) return "";
+  const parts = combo.split("+"), key = parts.at(-1);
+  if (!meta.keys.some(k => k.toLowerCase() === key.toLowerCase())) return `Unknown key "${key}"`;
+  if (meta.safeKeys.includes(key.toUpperCase())) return "";
+  if (/^Volume|^Media/.test(key)) return "Takes this key over from Windows while running";
+  if (parts.slice(0, -1).some(m => /^(ctrl|alt|win)$/i.test(m))) return "";
+  return "This key stops working normally while running";
+}
+
+function keyName(e) {
+  if (/^F\d{1,2}$/.test(e.key)) return e.key;
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+  if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
+  if (/^Numpad\d$/.test(e.code)) return "Num" + e.code.slice(6);
+  return { AudioVolumeUp: "VolumeUp", AudioVolumeDown: "VolumeDown", AudioVolumeMute: "VolumeMute",
+    MediaPlayPause: "MediaPlayPause", MediaTrackNext: "MediaNext", MediaTrackPrevious: "MediaPrev", MediaStop: "MediaStop",
+    Insert: "Insert", Delete: "Delete", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+    Pause: "Pause", ScrollLock: "ScrollLock", ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right" }[e.key] || null;
+}
+
+async function record(input, set) {
+  if (recording) return;
+  const before = input.value;
+  // Release our own hotkeys so a key that's already bound can be pressed again here.
+  await fetch("/api/inputs/pause", { method: "POST" });
+  input.value = ""; input.placeholder = "Press a key…"; input.classList.add("rec");
+  const finish = v => {
+    window.removeEventListener("keydown", recording, true);
+    recording = null;
+    fetch("/api/inputs/resume", { method: "POST" });
+    input.classList.remove("rec"); input.placeholder = "none";
+    input.value = v === null ? before : v;
+    if (v !== null) set(v);
+  };
+  recording = e => {
+    e.preventDefault(); e.stopPropagation();
+    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+    if (e.key === "Escape") return finish(null);
+    if (e.key === "Backspace") return finish("");
+    const name = keyName(e);
+    if (!name) { input.placeholder = `"${e.key}" isn't supported, try another`; return; }
+    const mods = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Win"].filter(Boolean);
+    finish([...mods, name].join("+"));
+  };
+  window.addEventListener("keydown", recording, true);
+}
+
+// ---------- provider & channels ----------
+function providerType() { return $("provider").value === "__custom" ? $("customProvider").value.trim() : $("provider").value; }
+
+async function loadChannels() {
+  const type = providerType();
+  const r = await j(`/api/channels?type=${encodeURIComponent(type)}&options=${encodeURIComponent(JSON.stringify(cfg.provider.options || {}))}`);
+  channels = r.channels || [];
+  if (r.error) setStatus("connStatus", `Can't list channels: ${r.error}`, "bad");
+  renderKnobs();
+}
+
+$("provider").onchange = () => {
+  $("customWrap").hidden = $("provider").value !== "__custom";
+  cfg.provider.type = providerType(); markDirty(); loadChannels();
+};
+$("customProvider").onchange = () => { cfg.provider.type = providerType(); markDirty(); loadChannels(); };
+$("providerOptions").onchange = () => {
+  try { cfg.provider.options = JSON.parse($("providerOptions").value || "{}"); markDirty(); loadChannels(); }
+  catch { showErrors(["Provider options must be valid JSON"]); }
+};
+
+// ---------- inputs & general ----------
+const inp = kind => (cfg.inputs[kind] ||= { enabled: false });
+$("hotkeysOn").onchange = e => { inp("hotkeys").enabled = e.target.checked; markDirty(); };
+$("serialOn").onchange = e => { inp("serial").enabled = e.target.checked; markDirty(); };
+$("serialPort").oninput = e => { inp("serial").port = e.target.value.trim(); markDirty(); };
+$("serialBaud").oninput = e => { inp("serial").baud = +e.target.value; markDirty(); };
+$("step").oninput = e => { cfg.step = +e.target.value / 100; markDirty(); };
+$("overlay").onchange = e => { cfg.overlay = e.target.checked; markDirty(); };
+
+// ---------- save ----------
+function markDirty() {
+  const dirty = JSON.stringify(cfg) !== saved;
+  $("dirty").textContent = dirty ? "Unsaved changes" : "No changes";
+  $("save").disabled = $("revert").disabled = !dirty;
+}
+function showErrors(list) {
+  $("errors").innerHTML = list.map(e => `<li>${esc(e)}</li>`).join("");
+  if (list.length) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+$("revert").onclick = () => { cfg = JSON.parse(saved); showErrors([]); renderAll(); loadChannels(); };
+$("save").onclick = async () => {
+  const res = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+  const body = await res.json();
+  if (!res.ok) return showErrors(body.errors || ["Save failed"]);
+  showErrors([]);
+  cfg = body.config; saved = JSON.stringify(cfg);
+  renderAll(); loadChannels();
+  $("dirty").textContent = "Saved ✓";
+};
+
+// ---------- live status ----------
+function setStatus(id, text, cls) { const el = $(id); el.textContent = text; el.className = `status ${cls || ""}`; }
+async function pollStatus() {
+  try {
+    const s = await j("/api/state");
+    if (s.navigate && s.navigate !== location.pathname) return location.assign(s.navigate);
+    setStatus("connStatus", s.connected ? "Connected" : `Not connected: ${s.error}`, s.connected ? "ok" : "bad");
+    const hk = s.inputs.hotkeys;
+    if (!hk) setStatus("hotkeyStatus", recording ? "Paused while recording a key" : "Off");
+    else {
+      const b = Object.entries(hk.bindings || {}), bad = b.filter(([, v]) => !v.ok);
+      setStatus("hotkeyStatus", bad.length ? bad.map(([k, v]) => `${k} (${v.knob} ${v.action}): ${v.error}`).join(" · ")
+                                            : `${b.length} key${b.length === 1 ? "" : "s"} active`, bad.length ? "bad" : "ok");
+    }
+    const se = s.inputs.serial;
+    setStatus("serialStatus", se ? se.state : "Off", se && se.state.startsWith("connected") ? "ok" : "");
+  } catch { setStatus("connStatus", "Knob Mixer is not running", "bad"); }
+  setTimeout(pollStatus, 1000);
+}
+
+window.addEventListener("beforeunload", e => { if (JSON.stringify(cfg) !== saved) e.preventDefault(); });
+init();
+</script>
+</body>
+</html>
