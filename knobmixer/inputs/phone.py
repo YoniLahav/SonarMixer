@@ -64,6 +64,15 @@ class PhoneInput(InputSource):
     def status(self):
         return {"state": self._state, "url": self._url if self._server else ""}
 
+    @property
+    def shown(self):
+        """Ids of the knobs ticked "Show on phone" in Settings."""
+        return {k["id"] for k in self.knobs if k.get("phone", True)}
+
+    def state(self):
+        st = self.get_state()
+        return {**st, "knobs": [k for k in st["knobs"] if k["id"] in self.shown]}
+
     def _handler(self):
         source = self
 
@@ -89,7 +98,7 @@ class PhoneInput(InputSource):
                     with open(os.path.join(WEB, "icon.ico"), "rb") as f:
                         return self._send(200, f.read(), "image/x-icon")
                 if path == "/api/state":
-                    return self._send(200, source.get_state())
+                    return self._send(200, source.state())
                 self._send(404, {})
 
             def do_POST(self):
@@ -103,7 +112,9 @@ class PhoneInput(InputSource):
                         amount = min(1.0, max(0.0, float(q.get("amount", ""))))
                     except ValueError:
                         return self._send(400, {"error": "amount must be a number"})
-                source.dispatch(q.get("id"), q["action"], amount, source="phone")
-                self._send(200, source.get_state())
+                if q.get("id") not in source.shown:
+                    return self._send(404, {})
+                source.dispatch(q["id"], q["action"], amount, source="phone")
+                self._send(200, source.state())
 
         return Handler

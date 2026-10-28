@@ -204,7 +204,8 @@ function renderKnobs() {
           <div class="kf"><input type="text" value="${esc(k.keys[a] || "")}" placeholder="none" spellcheck="false">
             <button class="icon rec" title="Record a key">⏺</button></div>
           <span class="warn"></span></label>`).join("")}
-      </div>`;
+      </div>
+      <label class="check" style="margin-top:8px"><input type="checkbox" class="phone" ${k.phone !== false ? "checked" : ""}> Show on phone</label>`;
     const [color, label] = el.querySelectorAll("input");
     color.oninput = () => { k.color = color.value; markDirty(); };
     label.oninput = () => { k.label = label.value; markDirty(); };
@@ -215,6 +216,7 @@ function renderKnobs() {
       if (other.hidden) { k.channel = sel.value; markDirty(); } else other.focus();
     };
     other.oninput = () => { k.channel = other.value.trim(); markDirty(); };
+    el.querySelector(".phone").onchange = e => { k.phone = e.target.checked; markDirty(); };
     el.querySelector(".up").onclick = () => move(i, -1);
     el.querySelector(".down").onclick = () => move(i, 1);
     el.querySelector(".del").onclick = () => { cfg.knobs.splice(i, 1); renderKnobs(); markDirty(); };

@@ -16,11 +16,15 @@
     --text: #e8e8ea; --muted: #9a9aa2; --danger: #ef4d5a; --ok: #4fc98a;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
-  body { display: flex; flex-direction: column;
-    padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none;
+    touch-action: manipulation; /* no double-tap zoom, which swallowed quick mute taps */ }
+  /* Pinned to the visible screen: the page can never scroll, so Safari's toolbar can't
+     collapse/expand and shift everything, and the bottom edge (where a tap brings the
+     toolbar back instead of reaching the page) is kept clear of buttons */
+  body { position: fixed; inset: 0; overflow: hidden; display: flex; flex-direction: column;
+    padding: calc(12px + env(safe-area-inset-top)) 16px calc(36px + env(safe-area-inset-bottom)); }
   header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   h1 { font-size: 17px; margin: 0; }
   #status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
@@ -29,7 +33,7 @@
   #status.bad { color: var(--danger); }
   #status.bad::before { background: var(--danger); }
 
-  #faders { flex: 1; min-height: 0; display: flex; gap: 12px; overflow-x: auto; }
+  #faders { flex: 1; min-height: 0; display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; }
   .ch { flex: 1 0 68px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 0; }
   .pct { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; height: 1.3em; }
   .track {
@@ -48,8 +52,12 @@
   .mute { font: inherit; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
     width: 100%; max-width: 92px; height: 84px; flex: none;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    border-radius: 16px; border: 2px solid var(--c); background: var(--card); color: #fff; }
-  .mute:active { transform: scale(.95); filter: brightness(1.3); }
+    border-radius: 16px; border: 2px solid var(--c); background: var(--card); color: #fff;
+    touch-action: none; }
+  .mute:focus { outline: none; }
+  .mute:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  /* Brighten on press instead of shrinking, so the button never gets smaller under your finger */
+  .mute.pressed { filter: brightness(1.5); }
   .mute svg { width: 30px; height: 30px; }
   .mute .ic-off, .ch.muted .mute .ic-on { display: none; }
   .ch.muted .mute .ic-off { display: block; }
@@ -58,7 +66,6 @@
   .ch.muted .mute { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 18px rgba(239, 77, 90, .45); }
   .ch.off { opacity: .35; }
   .ch.off .track, .ch.off .mute { pointer-events: none; }
-  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -67,7 +74,6 @@
   <span id="status">Connecting…</span>
 </header>
 <div id="faders"></div>
-<p class="hint">Touch or drag a bar to set its volume · tap a button to mute / unmute</p>
 
 <script>
 const faders = document.getElementById("faders");
@@ -119,7 +125,24 @@ function apply(s) {
   statusEl.textContent = s.connected ? "Connected" : `Audio unavailable`;
   statusEl.title = s.error || "";
   statusEl.className = s.connected ? "ok" : "bad";
-  for (const k of s.knobs) if (dragging !== k.id) render(k.id, k.volume, k.muted, k.available);
+  for (const k of s.knobs) {
+    if (dragging === k.id) continue;
+    // Right after a mute tap, keep showing the state we switched to: a poll that left before
+    // the tap (or a reply to an earlier tap) would otherwise flick it back for a moment
+    const holding = muteInflight[k.id] > 0 || Date.now() < (muteHoldUntil[k.id] || 0);
+    render(k.id, k.volume, holding ? els[k.id].muted : k.muted, k.available);
+  }
+}
+
+// Mute responds on touch-down and updates the button immediately; the server catches up after.
+const muteInflight = {}, muteHoldUntil = {};
+async function toggleMute(id) {
+  const e = els[id];
+  render(id, e.vol, !e.muted);
+  muteInflight[id] = (muteInflight[id] || 0) + 1;
+  await post(`id=${encodeURIComponent(id)}&action=mute`);
+  muteInflight[id]--;
+  muteHoldUntil[id] = Date.now() + 600;
 }
 
 async function post(q) {
@@ -164,7 +187,14 @@ function wire(id) {
     e.track.addEventListener("pointerup", up);
     e.track.addEventListener("pointercancel", up);
   });
-  e.mute.addEventListener("click", () => post(`id=${encodeURIComponent(id)}&action=mute`));
+  e.mute.addEventListener("pointerdown", ev => {
+    ev.preventDefault();  // no focus/scroll-into-view, no delayed click
+    e.mute.classList.add("pressed");
+    setTimeout(() => e.mute.classList.remove("pressed"), 150);
+    toggleMute(id);
+  });
+  // Keyboard (Enter/Space) still works; touch and mouse clicks are already handled above
+  e.mute.addEventListener("click", ev => { if (ev.detail === 0) toggleMute(id); });
 }
 
 let timer;

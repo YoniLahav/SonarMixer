@@ -26,9 +26,10 @@ DEFAULT = {
         "phone": {"enabled": False, "port": 8771},
     },
     "knobs": [
-        _knob("game", "Game", "game", "#4f6ee8", 13),
-        _knob("media", "Media", "media", "#1fb5c4", 16),
-        _knob("chat", "Chat", "chat", "#a557f2", 19),
+        # Sonar's own channel order and colors
+        _knob("game", "Game", "game", "#02ddbc", 13),
+        _knob("chat", "Chat", "chat", "#2db1fc", 16),
+        _knob("media", "Media", "media", "#ff53b0", 19),
         _knob("master", "Master", "master", "#d8dae0", 22),
     ],
 }
@@ -105,7 +106,8 @@ def validate(raw):
                 errors.append(f"{combo} is used twice ({seen_keys[combo]} and {label} {action})")
             seen_keys[combo] = f"{label} {action}"
             knob_keys[action] = combo
-        knobs.append({"id": id_, "label": label, "channel": channel, "color": color.lower(), "keys": knob_keys})
+        knobs.append({"id": id_, "label": label, "channel": channel, "color": color.lower(), "keys": knob_keys,
+                      "phone": bool(k.get("phone", True))})
     if not knobs:
         errors.append("add at least one knob")
     cfg["knobs"] = knobs
