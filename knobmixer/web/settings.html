@@ -106,6 +106,14 @@
     <p class="status" id="serialStatus"></p>
     <p class="hint">The device sends one line per event, naming a knob by its position or id: <code>1 +1</code> turn right,
       <code>1 -1</code> turn left, <code>1 press</code> toggle mute, <code>1 set 42</code> absolute position (for faders).</p>
+    <div style="height:10px"></div>
+    <label class="check"><input type="checkbox" id="phoneOn"> Phone remote (web page on your network)</label>
+    <div class="grid2" style="margin-top:8px">
+      <label class="field"><span>Port</span><input type="number" id="phonePort" min="1024" max="65535"></label>
+    </div>
+    <p class="status" id="phoneStatus"></p>
+    <p class="hint">Faders and mute buttons for every knob, for any phone or tablet on your WiFi. Settings stay on this PC.
+      Windows Firewall blocks other devices until you run <code>tools\allow-phone-firewall.ps1</code> once as admin.</p>
   </section>
 
   <section>
@@ -158,6 +166,9 @@ function renderAll() {
   $("serialOn").checked = !!se.enabled;
   $("serialPort").value = se.port || "";
   $("serialBaud").value = se.baud || 115200;
+  const ph = cfg.inputs.phone || {};
+  $("phoneOn").checked = !!ph.enabled;
+  $("phonePort").value = ph.port || 8771;
   $("step").value = +(cfg.step * 100).toFixed(2);
   $("overlay").checked = cfg.overlay;
   renderKnobs();
@@ -306,6 +317,8 @@ $("hotkeysOn").onchange = e => { inp("hotkeys").enabled = e.target.checked; mark
 $("serialOn").onchange = e => { inp("serial").enabled = e.target.checked; markDirty(); };
 $("serialPort").oninput = e => { inp("serial").port = e.target.value.trim(); markDirty(); };
 $("serialBaud").oninput = e => { inp("serial").baud = +e.target.value; markDirty(); };
+$("phoneOn").onchange = e => { inp("phone").enabled = e.target.checked; markDirty(); };
+$("phonePort").oninput = e => { inp("phone").port = +e.target.value; markDirty(); };
 $("step").oninput = e => { cfg.step = +e.target.value / 100; markDirty(); };
 $("overlay").onchange = e => { cfg.overlay = e.target.checked; markDirty(); };
 
@@ -347,6 +360,9 @@ async function pollStatus() {
     }
     const se = s.inputs.serial;
     setStatus("serialStatus", se ? se.state : "Off", se && se.state.startsWith("connected") ? "ok" : "");
+    const ph = s.inputs.phone;
+    setStatus("phoneStatus", ph ? ph.state : recording ? "Paused while recording a key" : "Off",
+              ph ? (ph.url ? "ok" : "bad") : "");
   } catch { setStatus("connStatus", "Knob Mixer is not running", "bad"); }
   setTimeout(pollStatus, 1000);
 }

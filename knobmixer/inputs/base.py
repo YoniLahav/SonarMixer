@@ -13,6 +13,9 @@ class InputSource:
     """
 
     label = "Unnamed input"
+    # Set by the mixer before start(): returns {"connected", "error", "step", "knobs": [...]}
+    # for inputs that display the current state (like the phone page).
+    get_state = None
 
     def __init__(self, knobs, options, dispatch):
         self.knobs = knobs          # the configured knobs, in order

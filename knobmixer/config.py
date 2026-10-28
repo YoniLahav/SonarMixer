@@ -23,6 +23,7 @@ DEFAULT = {
     "inputs": {
         "hotkeys": {"enabled": True},
         "serial": {"enabled": False, "port": "", "baud": 115200},
+        "phone": {"enabled": False, "port": 8771},
     },
     "knobs": [
         _knob("game", "Game", "game", "#4f6ee8", 13),
@@ -69,6 +70,13 @@ def validate(raw):
             cfg["inputs"]["serial"]["baud"] = int(cfg["inputs"]["serial"].get("baud", 115200))
         except (TypeError, ValueError):
             errors.append("serial baud rate must be a number")
+    if "phone" in cfg["inputs"]:
+        try:
+            cfg["inputs"]["phone"]["port"] = int(cfg["inputs"]["phone"].get("port", 8771))
+            if not 1024 <= cfg["inputs"]["phone"]["port"] <= 65535:
+                errors.append("phone remote port must be between 1024 and 65535")
+        except (TypeError, ValueError):
+            errors.append("phone remote port must be a number")
 
     knobs, seen_ids, seen_keys = [], set(), {}
     for i, k in enumerate(raw.get("knobs") or []):

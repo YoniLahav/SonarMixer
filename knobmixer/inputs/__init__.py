@@ -6,6 +6,7 @@ from .base import InputSource
 BUILTIN = {
     "hotkeys": ("knobmixer.inputs.hotkeys", "HotkeyInput", "Global hotkeys"),
     "serial": ("knobmixer.inputs.serial_input", "SerialInput", "Serial device (DIY knob box)"),
+    "phone": ("knobmixer.inputs.phone", "PhoneInput", "Phone remote (web page on your network)"),
 }
 
 

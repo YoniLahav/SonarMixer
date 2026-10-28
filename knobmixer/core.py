@@ -62,6 +62,7 @@ class Mixer:
                 continue
             try:
                 src = input_registry.resolve(kind)(self.cfg["knobs"], opts, self.dispatch)
+                src.get_state = self.knob_state
                 src.start()
                 self.inputs[kind] = src
             except Exception as e:
@@ -134,7 +135,8 @@ class Mixer:
             except Exception as e:  # never let one bad event kill an input thread
                 self._fail(f"{action} on {knob['label']} failed: {e!r}")
                 return
-        if source != "ui" and self.overlay and self.cfg["overlay"]:
+        # Skip the popup for on-screen changes: you're already looking at the knob
+        if source not in ("ui", "phone") and self.overlay and self.cfg["overlay"]:
             self.overlay.show(knob["label"], knob["color"], st["volume"], st["muted"])
 
     # --- state --------------------------------------------------------------------
@@ -166,7 +168,8 @@ class Mixer:
             self.refresh()
             time.sleep(POLL_SECONDS)
 
-    def snapshot(self):
+    def knob_state(self):
+        """Connection and knob values only; safe for inputs to read (no one-shot fields)."""
         with self.lock:
             knobs = []
             for k in self.cfg["knobs"]:
@@ -174,9 +177,12 @@ class Mixer:
                 knobs.append({"id": k["id"], "label": k["label"], "color": k["color"],
                               "channel": k["channel"], "available": st is not None,
                               "volume": st["volume"] if st else 0.0, "muted": st["muted"] if st else False})
+            return {"connected": self.connected, "error": self.error, "knobs": knobs, "step": self.cfg["step"]}
+
+    def snapshot(self):
+        with self.lock:
             navigate, self.navigate = self.navigate, None
-            return {"connected": self.connected, "error": self.error, "knobs": knobs,
-                    "step": self.cfg["step"], "navigate": navigate,
+            return {**self.knob_state(), "navigate": navigate,
                     "inputs": {kind: src.status() for kind, src in self.inputs.items()}}
 
     def list_channels(self, kind, options):

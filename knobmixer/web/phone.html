@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mixer">
+<meta name="theme-color" content="#050505">
+<title>Knob Mixer</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root {
+    --bg: #050505; --card: #0e0f12; --line: #1f2127; --track: #1a1c22;
+    --text: #e8e8ea; --muted: #9a9aa2; --danger: #ef4d5a; --ok: #4fc98a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column;
+    padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  h1 { font-size: 17px; margin: 0; }
+  #status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  #status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  #status.ok::before { background: var(--ok); }
+  #status.bad { color: var(--danger); }
+  #status.bad::before { background: var(--danger); }
+
+  #faders { flex: 1; min-height: 0; display: flex; gap: 12px; overflow-x: auto; }
+  .ch { flex: 1 0 68px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 0; }
+  .pct { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; height: 1.3em; }
+  .track {
+    position: relative; flex: 1; width: 100%; max-width: 92px; min-height: 160px;
+    border-radius: 18px; background: var(--track); border: 1px solid var(--line);
+    overflow: hidden; touch-action: none;
+  }
+  .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--c); opacity: .9;
+    transition: height 90ms linear, background 150ms; }
+  .grip { position: absolute; left: 22%; right: 22%; height: 4px; border-radius: 2px; background: #fff;
+    bottom: 0; transform: translateY(50%); box-shadow: 0 0 0 3px rgba(0,0,0,.25); transition: bottom 90ms linear; }
+  .ch.dragging .fill, .ch.dragging .grip { transition: none; }
+  .name { font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Big, high-contrast mute buttons: meant to be hit at a glance */
+  .mute { font: inherit; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    width: 100%; max-width: 92px; height: 84px; flex: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    border-radius: 16px; border: 2px solid var(--c); background: var(--card); color: #fff; }
+  .mute:active { transform: scale(.95); filter: brightness(1.3); }
+  .mute svg { width: 30px; height: 30px; }
+  .mute .ic-off, .ch.muted .mute .ic-on { display: none; }
+  .ch.muted .mute .ic-off { display: block; }
+  .ch.muted .fill { background: #3a3d45; }
+  .ch.muted .pct { color: var(--danger); }
+  .ch.muted .mute { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 18px rgba(239, 77, 90, .45); }
+  .ch.off { opacity: .35; }
+  .ch.off .track, .ch.off .mute { pointer-events: none; }
+  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mixer</h1>
+  <span id="status">Connecting…</span>
+</header>
+<div id="faders"></div>
+<p class="hint">Touch or drag a bar to set its volume · tap a button to mute / unmute</p>
+
+<script>
+const faders = document.getElementById("faders");
+const statusEl = document.getElementById("status");
+let els = {}, layout = "", dragging = null;
+
+function build(knobs) {
+  faders.replaceChildren();
+  els = {};
+  for (const k of knobs) {
+    const ch = document.createElement("div");
+    ch.className = "ch";
+    ch.style.setProperty("--c", k.color);
+    ch.innerHTML = `<div class="pct">–</div>
+      <div class="track" role="slider" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div><div class="grip"></div></div>
+      <div class="name"></div>
+      <button class="mute">
+        <svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/><path d="M16 9l6 6M22 9l-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span class="lbl">Mute</span>
+      </button>`;
+    ch.querySelector(".name").textContent = k.label;
+    ch.querySelector(".track").setAttribute("aria-label", `${k.label} volume`);
+    faders.appendChild(ch);
+    els[k.id] = { ch, track: ch.querySelector(".track"), fill: ch.querySelector(".fill"),
+                  grip: ch.querySelector(".grip"), pct: ch.querySelector(".pct"),
+                  mute: ch.querySelector(".mute"), lbl: ch.querySelector(".lbl"), vol: 0, muted: false };
+    wire(k.id);
+  }
+}
+
+function render(id, vol, muted, available = true) {
+  const e = els[id];
+  e.vol = vol; e.muted = muted;
+  const pct = `${(vol * 100).toFixed(1)}%`;
+  e.fill.style.height = pct;
+  e.grip.style.bottom = pct;
+  e.track.setAttribute("aria-valuenow", Math.round(vol * 100));
+  e.ch.classList.toggle("muted", available && muted);
+  e.ch.classList.toggle("off", !available);
+  e.pct.textContent = !available ? "n/a" : muted ? "MUTED" : `${Math.round(vol * 100)}%`;
+  e.lbl.textContent = muted ? "Muted" : "Mute";
+  e.mute.setAttribute("aria-pressed", String(muted));
+}
+
+function apply(s) {
+  const sig = JSON.stringify(s.knobs.map(k => [k.id, k.label, k.color]));
+  if (sig !== layout) { layout = sig; build(s.knobs); }
+  statusEl.textContent = s.connected ? "Connected" : `Audio unavailable`;
+  statusEl.title = s.error || "";
+  statusEl.className = s.connected ? "ok" : "bad";
+  for (const k of s.knobs) if (dragging !== k.id) render(k.id, k.volume, k.muted, k.available);
+}
+
+async function post(q) {
+  try { apply(await (await fetch(`/api/knob?${q}`, { method: "POST" })).json()); } catch {}
+}
+
+// Coalesce drag updates: at most one request in flight, always send the latest value.
+const pendingSet = {}, inflight = {};
+async function sendSet(id, v) {
+  pendingSet[id] = v;
+  if (inflight[id]) return;
+  inflight[id] = true;
+  while (pendingSet[id] !== undefined) {
+    const val = pendingSet[id]; delete pendingSet[id];
+    await post(`id=${encodeURIComponent(id)}&action=set&amount=${val}`);
+  }
+  inflight[id] = false;
+}
+
+function wire(id) {
+  const e = els[id];
+  // Absolute: the volume goes wherever you touch on the bar, and follows your finger
+  e.track.addEventListener("pointerdown", ev => {
+    e.track.setPointerCapture(ev.pointerId);
+    const rect = e.track.getBoundingClientRect();
+    dragging = id;
+    e.ch.classList.add("dragging");
+    const move = mv => {
+      const v = Math.min(1, Math.max(0, (rect.bottom - mv.clientY) / rect.height));
+      render(id, v, e.muted);
+      sendSet(id, v.toFixed(3));
+    };
+    move(ev);
+    const up = () => {
+      e.track.removeEventListener("pointermove", move);
+      e.track.removeEventListener("pointerup", up);
+      e.track.removeEventListener("pointercancel", up);
+      e.ch.classList.remove("dragging");
+      dragging = null;
+    };
+    e.track.addEventListener("pointermove", move);
+    e.track.addEventListener("pointerup", up);
+    e.track.addEventListener("pointercancel", up);
+  });
+  e.mute.addEventListener("click", () => post(`id=${encodeURIComponent(id)}&action=mute`));
+}
+
+let timer;
+async function poll() {
+  clearTimeout(timer);
+  try { apply(await (await fetch("/api/state")).json()); }
+  catch { statusEl.textContent = "Mixer not running"; statusEl.className = "bad"; }
+  if (!document.hidden) timer = setTimeout(poll, 500);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+poll();
+</script>
+</body>
+</html>

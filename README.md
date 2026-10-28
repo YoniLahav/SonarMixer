@@ -76,6 +76,17 @@ Raise `ProviderError` with a readable message when the software is unreachable. 
 |---|---|
 | `hotkeys` | global key combos per knob (turn left / turn right / press) |
 | `serial` | a DIY knob box over USB serial (`pip install pyserial`) |
+| `phone` | faders and mute buttons on your phone, served on your home network (default port 8771) |
+
+### Phone remote
+
+Turn on **Phone remote** in Settings, then open the address shown there (e.g. `http://192.168.1.23:8771`) on your phone. In Safari, Share → Add to Home Screen makes it open like an app.
+
+It only exposes the knobs (state, volume, mute). Settings stay on the PC-only server, since they can load Python modules. Windows Firewall blocks other devices until you allow the port once, from an admin PowerShell:
+
+```
+powershell -ExecutionPolicy Bypass -File tools\allow-phone-firewall.ps1
+```
 
 ### Serial protocol (for your own knob box)
 
@@ -124,7 +135,7 @@ knobmixer/
   overlay.py              on-screen popup (click-through, never takes focus)
   server.py               local web UI + JSON API on 127.0.0.1:8765
   providers/              base.py, sonar.py, windows.py
-  inputs/                 base.py, hotkeys.py, serial_input.py
-  web/                    index.html (knobs), settings.html
-tools/                    cli.py, sendkey.py
+  inputs/                 base.py, hotkeys.py, serial_input.py, phone.py
+  web/                    index.html (knobs), settings.html, phone.html
+tools/                    cli.py, sendkey.py, allow-phone-firewall.ps1
 ```
