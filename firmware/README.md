@@ -49,8 +49,8 @@ and turn a knob. You should see lines like:
 2 press
 ```
 
-If a knob goes the wrong way, set its entry in `DIRECTION` to `-1` (or swap its CLK and DT
-wires... but then they must still be neighbouring pins, so editing `DIRECTION` is easier).
+If a knob goes the wrong way, set its entry in `DIRECTION` to `-1`, or swap its CLK and DT
+wires.
 
 **Close the serial monitor afterwards.** Only one program can hold a COM port at a time.
 
