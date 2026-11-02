@@ -101,7 +101,7 @@ game +1     same, addressing the knob by id
 
 With this protocol no keys are involved at all. It reconnects automatically if the device is unplugged.
 
-Suggested hardware: EC11 rotary encoders (with push switch) and an RP2040 board such as a Pi Pico. A short CircuitPython or Arduino sketch prints the lines above.
+Ready-made firmware for an RP2040 board (RP2040-Zero, Pi Pico) with KY-040 / EC11 encoders is in [`firmware/`](firmware/README.md): wiring, flashing and setup.
 
 ### Writing an input
 
@@ -138,4 +138,5 @@ knobmixer/
   inputs/                 base.py, hotkeys.py, serial_input.py, phone.py
   web/                    index.html (knobs), settings.html, phone.html
 tools/                    cli.py, sendkey.py, allow-phone-firewall.ps1
+firmware/                 CircuitPython code.py for an RP2040 + rotary-encoder knob box
 ```
