@@ -32,6 +32,7 @@
   #status.ok::before { background: var(--ok); }
   #status.bad { color: var(--danger); }
   #status.bad::before { background: var(--danger); }
+  .right { display: flex; align-items: center; gap: 12px; }
 
   #faders { flex: 1; min-height: 0; display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; }
   .ch { flex: 1 0 68px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 0; }
@@ -71,7 +72,9 @@
 <body>
 <header>
   <h1>Mixer</h1>
-  <span id="status">Connecting…</span>
+  <div class="right">
+    <span id="status">Connecting…</span>
+  </div>
 </header>
 <div id="faders"></div>
 
@@ -196,6 +199,29 @@ function wire(id) {
   // Keyboard (Enter/Space) still works; touch and mouse clicks are already handled above
   e.mute.addEventListener("click", ev => { if (ev.detail === 0) toggleMute(id); });
 }
+
+// ---- Keep the screen awake while the page is open ----
+// Uses the Wake Lock API (https only). It's requested as soon as the page opens, and again
+// on the first touch after opening or coming back, since iOS only honors a request that
+// follows a touch on the page (any touch: a fader, a button) and drops it when hidden.
+let wakeLock = null, needLock = true;
+
+async function keepAwake() {
+  if (document.hidden || !needLock || !("wakeLock" in navigator)) return;
+  needLock = false;
+  try {
+    const lock = await navigator.wakeLock.request("screen");
+    if (wakeLock && !wakeLock.released) wakeLock.release().catch(() => {});
+    wakeLock = lock;
+    lock.addEventListener("release", () => { needLock = true; });
+  } catch {
+    needLock = true;  // e.g. Low Power Mode; try again on the next touch
+  }
+}
+
+for (const ev of ["pointerup", "touchend", "click"]) document.addEventListener(ev, keepAwake, true);
+document.addEventListener("visibilitychange", () => { if (document.hidden) needLock = true; else keepAwake(); });
+keepAwake().then(() => { needLock = true; });  // also ask on open; the first touch asks again
 
 let timer;
 async function poll() {

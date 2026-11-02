@@ -2,3 +2,4 @@ pystray        # tray icon
 pillow         # tray icon image
 pycaw          # optional: "windows" audio provider
 pyserial       # optional: "serial" knob box input
+cryptography   # phone remote: https certificate (lan_https.py)

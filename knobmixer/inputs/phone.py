@@ -3,35 +3,27 @@
 Only knob state, volume and mute are exposed. Settings stay on the PC-only server,
 because they can load arbitrary Python modules.
 
+It's served over https (see lan_https.py), so the page can keep the phone's screen awake.
+Plain http on the same port shows a one-time page for trusting this PC's certificate.
+
 Windows Firewall blocks the port for other devices until it's allowed once:
     tools/allow-phone-firewall.ps1   (run as admin)
 """
 import json
 import os
-import socket
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
+from .. import lan_https
 from .base import InputSource
 
 WEB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
 ACTIONS = ("up", "down", "set", "mute")
 
 
-def lan_ip():
-    """This PC's address on the local network (no packet is actually sent)."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        try:
-            s.connect(("192.0.2.1", 9))
-            return s.getsockname()[0]
-        except OSError:
-            return "127.0.0.1"
-
-
-class _Server(ThreadingHTTPServer):
+class _Server(lan_https.DualProtocolServer):
     allow_reuse_address = False  # fail loudly if the port is taken, instead of sharing it
-    daemon_threads = True
 
 
 class PhoneInput(InputSource):
@@ -46,11 +38,16 @@ class PhoneInput(InputSource):
     def start(self):
         port = int(self.options.get("port", 8771))
         try:
-            self._server = _Server(("0.0.0.0", port), self._handler())
+            context = lan_https.ssl_context()
+        except Exception as e:
+            self._state = f"couldn't set up the https certificate ({e})"
+            return
+        try:
+            self._server = _Server(("0.0.0.0", port), self._handler(), context)
         except OSError as e:
             self._state = f"couldn't open port {port} ({e.strerror or e})"
             return
-        self._url = f"http://{lan_ip()}:{port}/"
+        self._url = f"https://{lan_https.lan_ip()}:{port}/"
         self._state = f"open {self._url} on your phone"
         threading.Thread(target=self._server.serve_forever, daemon=True, name="phone").start()
 
@@ -77,8 +74,23 @@ class PhoneInput(InputSource):
         source = self
 
         class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"  # keep connections open: no TLS handshake per poll
+            timeout = 30                   # ...but close idle ones
+
             def log_message(self, *args):
                 pass
+
+            def _plain_http(self):
+                """Plain http only offers the certificate setup; the mixer itself is https-only."""
+                if lan_https.is_secure(self):
+                    return False
+                if self.command == "GET" and urlparse(self.path).path == "/ca.cer":
+                    self._send(200, lan_https.ca_der(), "application/x-x509-ca-cert")
+                elif self.command == "GET":
+                    self._send(200, lan_https.setup_page("Knob Mixer").encode(), "text/html; charset=utf-8")
+                else:
+                    self._send(403, {"error": "use https"})
+                return True
 
             def _send(self, code, body, ctype="application/json"):
                 data = body if isinstance(body, bytes) else json.dumps(body).encode()
@@ -90,6 +102,8 @@ class PhoneInput(InputSource):
                 self.wfile.write(data)
 
             def do_GET(self):
+                if self._plain_http():
+                    return
                 path = urlparse(self.path).path
                 if path in ("/", "/index.html"):
                     with open(os.path.join(WEB, "phone.html"), "rb") as f:
@@ -102,6 +116,8 @@ class PhoneInput(InputSource):
                 self._send(404, {})
 
             def do_POST(self):
+                if self._plain_http():
+                    return
                 url = urlparse(self.path)
                 q = {k: v[0] for k, v in parse_qs(url.query).items()}
                 if url.path != "/api/knob" or q.get("action") not in ACTIONS:

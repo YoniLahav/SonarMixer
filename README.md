@@ -80,7 +80,9 @@ Raise `ProviderError` with a readable message when the software is unreachable. 
 
 ### Phone remote
 
-Turn on **Phone remote** in Settings, then open the address shown there (e.g. `http://192.168.1.23:8771`) on your phone. In Safari, Share → Add to Home Screen makes it open like an app.
+Turn on **Phone remote** in Settings, then open the address shown there (e.g. `https://192.168.1.23:8771`) on your phone. In Safari, Share → Add to Home Screen makes it open like an app. While it's open, it keeps the phone's screen from locking.
+
+It's served over https, because iOS only lets https pages keep the screen awake. The certificate comes from a small private certificate authority on this PC (`%APPDATA%\LanHttps`, created automatically, restricted to home-network addresses). The phone has to trust it once: open the `http://` address instead and follow the steps on the page. Any other app using the same `lan_https.py` (like the Soundpad remote) shares that authority, so it's a one-time step for all of them.
 
 It only exposes the knobs (state, volume, mute). Settings stay on the PC-only server, since they can load Python modules. Windows Firewall blocks other devices until you allow the port once, from an admin PowerShell:
 
@@ -133,6 +135,7 @@ knobmixer/
   config.py               defaults, validation, load/save
   keys.py                 key-combo parsing
   overlay.py              on-screen popup (click-through, never takes focus)
+  lan_https.py            https certificate for the phone remote (shared with other LAN apps)
   server.py               local web UI + JSON API on 127.0.0.1:8765
   providers/              base.py, sonar.py, windows.py
   inputs/                 base.py, hotkeys.py, serial_input.py, phone.py
